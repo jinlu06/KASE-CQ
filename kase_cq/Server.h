@@ -3,26 +3,27 @@
 #include "util.h"
 #include <iostream>
 #include <vector>
+#include "network/network.h"
 using namespace std;
 class Server {
 public:
-    Server(Params* param) {
-        sys_param = param;
-        cipher = new Cipher[sys_param->n + 1];
-        for (size_t i = 0; i < sys_param->n + 1; ++i) {
-            cipher[i].init(sys_param->pairing, sys_param->m);
-        }
-    };
+    Server(Params* param);
+    void init();
     ~Server();
+
     void keygen();
-    element_t* send_pks_to_dow() {return &pks;};
-    Cipher* receive_index_from_dow() {return cipher;};
+    void send_pks_to_dow();
+
+    void receive_index_from_dow();
+
     void adjust(Trapdoor& tr_in, vector<size_t>& S, int i, Trapdoor& tr_out);
     void test(Trapdoor& tr_in, vector<size_t>& S, int i, Cipher& cipher);
-    void search(vector<size_t>& S, Trapdoor& tr);
+    void search();
 
 private:
     Params* sys_param;
+    Server_N net_to_dow;
+    Server_N net_to_user;
     element_t pks;
     element_t sks;
     Cipher* cipher;

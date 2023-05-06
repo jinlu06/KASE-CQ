@@ -1,22 +1,25 @@
 #include "util.h"
+#include "network/network.h"
 class DataOwner{
 public:
-    DataOwner(Params* param) {
-        sys_param = param;
-    };
+    DataOwner(Params* param);
+    void init();
     ~DataOwner();
-    void receive_pks_from_server(element_t* ser_pk) {this->ser_pk = ser_pk;};
+
     void keygen();
-    element_t* send_pk1_to_user() { return &pk1;};
-    void encrypt(Cipher* cipher);
-    void extract(std::vector<size_t>& wanted, element_t &agg);
-    // void send_agg(Channel *channel, element_t& agg, vector<size_t>& S);
+    void receive_pks_from_server();
+    void send_pk1_to_user();
+
+    void encrypt();
+    void extract();
     
 private:
     Params* sys_param;
+    Server_N net_to_user;
+    Client_N net_to_server;
     element_t pk1;
     element_t pk2;
     element_t sk1;
     element_t sk2;
-    element_t* ser_pk;
+    element_t ser_pk;
 };

@@ -4,26 +4,61 @@
 #include <chrono>
 #include <cstring>
 using namespace std;
+DataOwner::DataOwner(Params* param) {
+    sys_param = param;
+    net_to_user.init(DEFPORT);
+    net_to_user.server_accept();
+    net_to_server.init("127.0.0.1", DEFPORT + 1);
+    init();
+};
+
+void DataOwner::init() {
+	size_t buffer_size = sys_param->string_to_param(NULL);
+	char buf[buffer_size];
+    net_to_server.receive(buf, buffer_size);
+    sys_param->string_to_param(buf);
+}
+
 void DataOwner::keygen() {
   element_init_Zr(sk1, sys_param->pairing);
   element_init_Zr(sk2, sys_param->pairing);
   element_init_G1(pk1, sys_param->pairing);
   element_init_G1(pk2, sys_param->pairing);
+  element_init_G1(ser_pk, sys_param->pairing);
   element_random(sk1);
   element_random(sk2);
   element_pow_zn(pk1, sys_param->g, sk1);
   element_pow_zn(pk2, sys_param->g, sk2);
+  receive_pks_from_server();
+  send_pk1_to_user();
 }
+
+void DataOwner::send_pk1_to_user() {
+    char buf[ELEMENT_SIZE];
+    element_snprint(buf, ELEMENT_SIZE, pk1);
+    net_to_user.send(buf, ELEMENT_SIZE);
+}
+
+void DataOwner::receive_pks_from_server() {
+    char buf[ELEMENT_SIZE];
+    net_to_server.receive(buf, ELEMENT_SIZE);
+    element_set_str(ser_pk, buf, 0);
+};
 
 DataOwner::~DataOwner() {
     element_clear(sk1);
     element_clear(pk1);
     element_clear(sk2);
     element_clear(pk2);
+    element_clear(ser_pk);
 }
 
-void DataOwner::encrypt(Cipher* cipher) {
-    string filename = "character/5W.txt";
+void DataOwner::encrypt() {
+    Cipher* cipher = new Cipher[sys_param->n + 1];
+	for (size_t i = 0; i < sys_param->n + 1; ++i) {
+		cipher[i].init(sys_param->pairing, sys_param->m);
+	}
+    string filename = "kase_cq/character/5W.txt";
     fstream f(filename);
     vector<file> data;
     if(!f)
@@ -97,14 +132,11 @@ auto start_enc = chrono::system_clock::now();
 
 		element_init_Zr(hash, sys_param->pairing);
 		sys_param->Hash(hash, keyword, len);
-
 		element_init_Zr(br, sys_param->pairing);
 		element_mul(br, sk1, r);
 		element_init_Zr(add1, sys_param->pairing);
 		element_add(add1, hash, br);
-
-		element_pow_zn((cipher[i].Cw)[j], *ser_pk, add1);
-
+		element_pow_zn((cipher[i].Cw)[j], ser_pk, add1);
 		element_clear(hash);
 		element_clear(add1);
 		element_clear(br);
@@ -113,22 +145,42 @@ auto start_enc = chrono::system_clock::now();
 	element_clear(t);
 	element_clear(r);
   }
+
 auto end_enc= chrono::system_clock::now();
 chrono::duration<double> time_enc = end_enc - start_enc;
 cout << "enc generte time " << GREEN << time_enc.count() << WHITE << " s"<<endl;
 cout << "------------------------------------------" <<endl;
+
+    size_t buffer_size = (sys_param->n + 1) *  cipher[0].to_string(NULL);
+    char buf[buffer_size];
+    size_t offset = 0;
+    for (size_t i = 0; i < sys_param->n + 1; ++i) {
+        offset = cipher[i].to_string(buf + i * offset);
+    }
+    net_to_server.send(buf, buffer_size);
 }
 
-void DataOwner::extract(std::vector<size_t>& wanted, element_t &agg) {
-auto start_agg = chrono::system_clock::now();		
+void DataOwner::extract() {
+    size_t wanted_size;
+    cout << "please input you share file number: ";
+    cin.clear();
+    cin.ignore();
+    cin >> wanted_size;
+    size_t wanted[wanted_size];
+    for(size_t i = 0; i<wanted_size; i++)
+    {
+        wanted[i] = i + 1;
+    }
+auto start_agg = chrono::system_clock::now();
+    element_t agg;
     element_init_G1(agg, sys_param->pairing);
-    for(vector<size_t>::iterator it = wanted.begin(); it!= wanted.end(); it++)
+    for(auto it : wanted)
     {
         element_t temp;
-        size_t temp2 = (sys_param->n + 1) - *it;
+        size_t temp2 = (sys_param->n + 1) - it;
         element_init_G1(temp, sys_param->pairing);
         element_pow_zn(temp, sys_param->gn[temp2], sk2);
-        if(it == wanted.begin()) element_set(agg, temp);
+        if(it == wanted[0]) element_set(agg, temp);
         else element_mul(agg, agg, temp);
         element_clear(temp);
     }
@@ -136,4 +188,13 @@ auto end_agg= chrono::system_clock::now();
 chrono::duration<double> time_agg = end_agg - start_agg;
 cout << "agg generte time " << GREEN << time_agg.count() << WHITE << " s"<<endl;
 cout << "------------------------------------------" <<endl;
+
+    net_to_user.send(reinterpret_cast<char*>(&wanted_size), sizeof(size_t));
+
+    size_t buffer_size = ELEMENT_SIZE + wanted_size * sizeof(size_t);
+    char buf[buffer_size];
+    element_snprint(buf, ELEMENT_SIZE, agg);
+
+    memcpy(buf + ELEMENT_SIZE, wanted, wanted_size * sizeof(size_t));
+    net_to_user.send(buf, buffer_size);
 }

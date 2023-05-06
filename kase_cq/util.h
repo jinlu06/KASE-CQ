@@ -13,11 +13,15 @@
 #define BLUE    "\033[34m"      /* Blue */
 #define WHITE   "\033[37m"      /* White */
 
+#define ELEMENT_SIZE 512
+
 class Params{
 public:    
     Params() {};
-    void init(char* file_name, int n_, int m_);
+    void init(char* file_name, int n_, int m_, int);
     ~Params();
+    size_t to_string(char* buf);
+    size_t string_to_param(char* buf); 
 public:
     pairing_t pairing;
     element_t g;
@@ -41,7 +45,8 @@ public:
     Cipher();
     ~Cipher();
     void init(pairing_t& pairing, int m);
-    
+    size_t to_string(char* buf);
+    size_t string_to_cipher(char* buf);
 public:
 	element_t c1;
 	element_t c2;
@@ -58,6 +63,8 @@ public:
     Trapdoor(Trapdoor&);
     ~Trapdoor();
     void init(pairing_t& pairing);
+    size_t to_string(char* buf);
+    size_t string_to_trapdoor(char* buf, size_t);
     element_t t1;
     element_t t2;
     std::vector<size_t> t3;
